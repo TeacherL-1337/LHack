@@ -1,8 +1,5 @@
 #include "gui.h"
 
-Vector3 worldPos{ 10, 4, 10 };
-Vector2 screenPos{};
-
 typedef HRESULT(__stdcall* ResizeBuffers)(IDXGISwapChain*, UINT, UINT, UINT, DXGI_FORMAT, UINT);
 ResizeBuffers oResizeBuffers = nullptr;
 ResizeBuffers pResizeBuffersTarget;
@@ -57,7 +54,7 @@ static bool GetVTablePointer()
 
 WNDPROC oWndProc;
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-LRESULT __stdcall WndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+static LRESULT __stdcall WndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	if (true && ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
 	{
@@ -104,36 +101,29 @@ static void CreateRenderTarget(IDXGISwapChain* pSwapChain)
 	}
 }
 
-bool guiEnable = false;
-bool getPlayerList = false;
+bool guiEnable = true;
+bool createFly = false;
+bool noKickBack = false;
+bool noClip = false;
 
 static void RenderUI()
 {
-	ImGui_ImplDX11_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-
-	ImGui::NewFrame();
-
 	ImGui::Begin("LHack");
 	ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-	ImGui::Text("LocalPlayer: %p", hookManger->GetLocalPlayer());
-	ImGui::Checkbox("GetPlayerList", &getPlayerList);
-	if (getPlayerList)
-	{
-		ImGui::Text("PlayerList:");
+	
+	ImGui::Checkbox("CreateFly", &createFly);
+	cheatsManager->CreateFly(createFly);
 
-		int i = 1;
-		for (auto& ptr : hookManger->GetPlayerList())
-		{
-			ImGui::Text("	%d. %p", i, ptr);
-			i++;
-		}
+	ImGui::Checkbox("NoKickBack", &noKickBack);
+	cheatsManager->NoKickBack(noKickBack);
+
+	if (ImGui::Button("Exit"))
+	{
+		guiEnable = false;
+		LHackExitFlag = true;
 	}
 
 	ImGui::End();
-
-	ImGui::EndFrame();
-	ImGui::Render();
 }
 
 static HRESULT __stdcall hkResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
@@ -160,7 +150,7 @@ static HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT syncInterval
 			DXGI_SWAP_CHAIN_DESC sd;
 			pSwapChain->GetDesc(&sd);
 			window = sd.OutputWindow;
-			ID3D11Texture2D* pBackBuffer;
+			ID3D11Texture2D* pBackBuffer{};
 			pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
 			pDevice->CreateRenderTargetView(pBackBuffer, NULL, &mainRenderTargetView);
 			pBackBuffer->Release();
@@ -178,7 +168,18 @@ static HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT syncInterval
 		}
 	}
 
-	RenderUI();
+	ImGui_ImplDX11_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+
+	ImGui::NewFrame();
+
+	if (guiEnable)
+	{
+		RenderUI();
+	}
+
+	ImGui::EndFrame();
+	ImGui::Render();
 
 	pContext->OMSetRenderTargets(1, &mainRenderTargetView, NULL);
 	if (mainRenderTargetView == nullptr)
