@@ -1,4 +1,4 @@
-#include "hookManager.h"
+﻿#include "hookManager.h"
 
 DWORD64 localPlayer{};
 std::vector<DWORD64> entityList;
@@ -108,47 +108,78 @@ BOOL HookManager::InitFunctionsAddr(VOID)
 		(PCHAR)"Minecraft.Windows.exe"
 	);
 
-	if (!this->pPlayerMove) { return false; }
-	if (!this->pEntityReader) { return false; }
-	if (!this->pCreateVector) { return false; }
-	if (!this->pPermissionManager) { return false; }
+	if (!this->pPlayerMove)
+	{
+		Logger::Log("Failed to find address of PlayerMove.", Error);
+		return false;
+	}
+	if (!this->pEntityReader)
+	{
+		Logger::Log("Failed to find address of EntityReader.", Error);
+		return false;
+	}
+	if (!this->pCreateVector)
+	{
+		Logger::Log("Failed to find address of CreateVector.", Error);
+		return false;
+	}
+	if (!this->pPermissionManager)
+	{
+		Logger::Log("Failed to find address of PermissionManager.", Error);
+		return false;
+	}
 
 	return true;
 }
 
 HookManager::HookManager()
 {
-	if (!this->InitFunctionsAddr())
-	{
-		throw std::runtime_error("Failed to initialize functions address");
+	try {
+		if (!this->InitFunctionsAddr())
+		{
+			throw std::runtime_error("Failed to get functions address");
+		}
+
+		if (MH_Initialize() != MH_OK)
+		{
+			throw std::runtime_error("Failed to initialize MinHook.");
+		}
+
+		if (MH_CreateHook((void*)this->pPlayerMove, (void*)(&hkPlayerMove), (void**)(&oPlayerMove)) != MH_OK)
+		{
+			throw std::runtime_error("Failed to create hook.");
+		}
+
+		if (MH_CreateHook((void*)this->pEntityReader, (void*)(&hkEntityReader), (void**)(&oEntityReader)) != MH_OK)
+		{
+			throw std::runtime_error("Failed to create hook.");
+		}
+
+		if (MH_EnableHook((void*)this->pPlayerMove) != MH_OK)
+		{
+			throw std::runtime_error("Failed to enable hook.");
+		}
+
+		if (MH_EnableHook((void*)this->pEntityReader) != MH_OK)
+		{
+			throw std::runtime_error("Failed to enable hook.");
+		}
+
+		HANDLE hThread = CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)HookManagerThread, GetModuleHandleA(NULL), 0, nullptr);
+		if (!hThread)
+		{
+			throw std::runtime_error("Failed to Create HookManagerThread.");
+		}
+		else
+		{
+			CloseHandle(hThread);
+		}
+	}
+	catch (const std::exception& e) {
+		Logger::Log(e.what(), Critical);
 	}
 
-	if (MH_Initialize() != MH_OK)
-	{
-		throw std::runtime_error("Failed to initialize MinHook.");
-	}
-
-	if (MH_CreateHook((void*)this->pPlayerMove, (void*)(&hkPlayerMove), (void**)(&oPlayerMove)) != MH_OK)
-	{
-		throw std::runtime_error("Failed to create hook.");
-	}
-
-	if (MH_CreateHook((void*)this->pEntityReader, (void*)(&hkEntityReader), (void**)(&oEntityReader)) != MH_OK)
-	{
-		throw std::runtime_error("Failed to create hook.");
-	}
-
-	if (MH_EnableHook((void*)this->pPlayerMove) != MH_OK)
-	{
-		throw std::runtime_error("Failed to enable hook.");
-	}
-
-	if (MH_EnableHook((void*)this->pEntityReader) != MH_OK)
-	{
-		throw std::runtime_error("Failed to enable hook.");
-	}
-
-	CloseHandle(CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)HookManagerThread, GetModuleHandleA(NULL), 0, nullptr));
+	Logger::Log("HookManager initialization successful.");
 }
 
 DWORD64 HookManager::GetLocalPlayer(VOID)
@@ -161,7 +192,7 @@ std::vector<DWORD64> HookManager::GetPlayerList(VOID)
 	return playerList;
 }
 
-DWORD64 HookManager::GetFunctionAddress(FuntionIndex index)
+DWORD64 HookManager::GetFunctionAddress(Funtions index)
 {
 	switch (index)
 	{

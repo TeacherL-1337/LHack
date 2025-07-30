@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "../Hook/hookManager.h"
 #include "../Memory/memory.h"

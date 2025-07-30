@@ -1,4 +1,4 @@
-#include "gui.h"
+﻿#include "gui.h"
 
 typedef HRESULT(__stdcall* ResizeBuffers)(IDXGISwapChain*, UINT, UINT, UINT, DXGI_FORMAT, UINT);
 ResizeBuffers oResizeBuffers = nullptr;
@@ -24,21 +24,22 @@ static bool GetVTablePointer()
 	ID3D11Device* device;
 
 	const D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, };
-	if (
-		D3D11CreateDeviceAndSwapChain(
-			NULL,
-			D3D_DRIVER_TYPE_HARDWARE,
-			NULL,
-			0,
-			featureLevels,
-			2,
-			D3D11_SDK_VERSION,
-			&sd,
-			&swapChain,
-			&device,
-			nullptr,
-			nullptr) == S_OK
-		)
+
+	HRESULT d3d11ResultCode = D3D11CreateDeviceAndSwapChain(
+		NULL,
+		D3D_DRIVER_TYPE_HARDWARE,
+		NULL,
+		0,
+		featureLevels,
+		2,
+		D3D11_SDK_VERSION,
+		&sd,
+		&swapChain,
+		&device,
+		nullptr,
+		nullptr);
+
+	if (d3d11ResultCode == S_OK)
 	{
 		void** pVTable = *reinterpret_cast<void***>(swapChain);
 		swapChain->Release();
@@ -47,6 +48,10 @@ static bool GetVTablePointer()
 		pResizeBuffersTarget = (ResizeBuffers)pVTable[13];
 
 		return true;
+	}
+	else
+	{
+		Logger::Log(std::format("D3D11CreateDeviceAndSwapChain Failed, Error code: 0x{:x}", d3d11ResultCode).c_str(), Error);
 	}
 
 	return false;
@@ -108,22 +113,32 @@ bool noClip = false;
 
 static void RenderUI()
 {
-	ImGui::Begin("LHack");
-	ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-	
-	ImGui::Checkbox("CreateFly", &createFly);
-	cheatsManager->CreateFly(createFly);
+	ImGui_ImplDX11_NewFrame();
+	ImGui_ImplWin32_NewFrame();
 
-	ImGui::Checkbox("NoKickBack", &noKickBack);
-	cheatsManager->NoKickBack(noKickBack);
-
-	if (ImGui::Button("Exit"))
+	ImGui::NewFrame();
 	{
-		guiEnable = false;
-		LHackExitFlag = true;
-	}
+		ImGui::Begin("LHack");
+		{
+			ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
 
-	ImGui::End();
+			ImGui::Checkbox("CreateFly", &createFly);
+			cheatsManager->CreateFly(createFly);
+
+			ImGui::Checkbox("NoKickBack", &noKickBack);
+			cheatsManager->NoKickBack(noKickBack);
+
+			if (ImGui::Button("Exit"))
+			{
+				guiEnable = false;
+				LHackExitFlag = true;
+			}
+		}
+		ImGui::End();
+	}
+	ImGui::EndFrame();
+	
+	ImGui::Render();
 }
 
 static HRESULT __stdcall hkResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
@@ -168,18 +183,10 @@ static HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT syncInterval
 		}
 	}
 
-	ImGui_ImplDX11_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-
-	ImGui::NewFrame();
-
 	if (guiEnable)
 	{
 		RenderUI();
 	}
-
-	ImGui::EndFrame();
-	ImGui::Render();
 
 	pContext->OMSetRenderTargets(1, &mainRenderTargetView, NULL);
 	if (mainRenderTargetView == nullptr)
@@ -194,39 +201,46 @@ static HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT syncInterval
 
 Gui::Gui()
 {
-	if (!GetVTablePointer())
-	{
-		throw std::runtime_error("Failed to get VTable");
-	}
-
-	MH_STATUS status = MH_Initialize();
-	if (status != MH_OK)
-	{
-		if (status != MH_ERROR_ALREADY_INITIALIZED)
+	try {
+		if (!GetVTablePointer())
 		{
-			throw std::runtime_error("Failed to initialize MinHook");
+			throw std::runtime_error("Failed to get VTable.");
+		}
+
+		MH_STATUS status = MH_Initialize();
+		if (status != MH_OK)
+		{
+			if (status != MH_ERROR_ALREADY_INITIALIZED)
+			{
+				throw std::runtime_error("Failed to initialize MinHook.");
+			}
+		}
+
+		if (MH_CreateHook(reinterpret_cast<void**>(pPresentTarget), &hkPresent, reinterpret_cast<void**>(&oPresent)) != MH_OK)
+		{
+			throw std::runtime_error("Failed to create Hook.");
+		}
+
+		if (MH_CreateHook(reinterpret_cast<void**>(pResizeBuffersTarget), &hkResizeBuffers, reinterpret_cast<void**>(&oResizeBuffers)) != MH_OK)
+		{
+			throw std::runtime_error("Failed to create Hook.");
+		}
+
+		if (MH_EnableHook(pPresentTarget) != MH_OK)
+		{
+			throw std::runtime_error("Failed to enable hook.");
+		}
+
+		if (MH_EnableHook(pResizeBuffersTarget) != MH_OK)
+		{
+			throw std::runtime_error("Failed to enable hook.");
 		}
 	}
-
-	if (MH_CreateHook(reinterpret_cast<void**>(pPresentTarget), &hkPresent, reinterpret_cast<void**>(&oPresent)) != MH_OK)
-	{
-		throw std::runtime_error("Failed to create Hook.");
+	catch (const std::exception& e) {
+		Logger::Log(e.what(), Critical);
 	}
 
-	if (MH_CreateHook(reinterpret_cast<void**>(pResizeBuffersTarget), &hkResizeBuffers, reinterpret_cast<void**>(&oResizeBuffers)) != MH_OK)
-	{
-		throw std::runtime_error("Failed to create Hook.");
-	}
-
-	if (MH_EnableHook(pPresentTarget) != MH_OK)
-	{
-		throw std::runtime_error("Failed to enable hook.");
-	}
-
-	if (MH_EnableHook(pResizeBuffersTarget) != MH_OK)
-	{
-		throw std::runtime_error("Failed to enable hook.");
-	}
+	Logger::Log("Gui initialization successful.");
 }
 
 BOOL Gui::Show(VOID)

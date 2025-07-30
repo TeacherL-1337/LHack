@@ -1,11 +1,10 @@
-#pragma once
+﻿#pragma once
 
-#include <bit>
-#include <chrono>
-#include <string>
 #include "../../ext/MinHook/include/MinHook.h"
+#include "../Gui/gui.h"
+#include "../Log/log.h"
 #include "../Memory/memory.h"
-#include "../Cheats/cheatsManager.h"
+#include <chrono>
 
 typedef void(__fastcall* PlayerMove_t)(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5, char a6, __int64 a7, __int64 a8);
 inline PlayerMove_t oPlayerMove = nullptr;
@@ -19,7 +18,7 @@ inline CreateVector_t oCreateVector = nullptr;
 typedef void(__fastcall* PermissionManager_t)(__int64 a1, __int64 a2, unsigned __int8 a3);
 inline PermissionManager_t oPermissionManager = nullptr;
 
-enum FuntionIndex
+enum Funtions
 {
 	PlayerMove,
 	EntityReader,
@@ -44,7 +43,7 @@ public:
 	DWORD64					GetModuleBase		(VOID);
 	DWORD64					GetLocalPlayer		(VOID);
 	std::vector<DWORD64>	GetPlayerList		(VOID);
-	DWORD64					GetFunctionAddress	(FuntionIndex index);
+	DWORD64					GetFunctionAddress	(Funtions index);
 	VOID					DisableAll			(VOID);
 
 };
